@@ -21,6 +21,14 @@ export async function handleCreateGroup(
     const roleName = `Grupo ${groupName}`;
     const channelName = `grupo-${groupName.toLowerCase().replace(/\s+/g, "-")}`;
 
+    let categoryId = config.categoryChannelId;
+    if (categoryId) {
+      const category = guild.channels.cache.get(categoryId);
+      if (!category || category.type !== ChannelType.GuildCategory) {
+        categoryId = undefined; 
+      }
+    }
+
     let role = guild.roles.cache.find((r) => r.name === roleName);
     if (!role) {
       role = await guild.roles.create({
@@ -36,7 +44,7 @@ export async function handleCreateGroup(
       textChannel = await guild.channels.create({
         name: channelName,
         type: ChannelType.GuildText,
-        parent: config.categoryChannelId,
+        parent: categoryId,
         permissionOverwrites: [
           {
             id: guild.id,
@@ -56,8 +64,8 @@ export async function handleCreateGroup(
         ViewChannel: true,
         SendMessages: true,
       });
-      if (config.categoryChannelId && textChannel.parentId !== config.categoryChannelId) {
-        await textChannel.setParent(config.categoryChannelId);
+      if (categoryId && textChannel.parentId !== categoryId) {
+        await textChannel.setParent(categoryId);
       }
     }
 
@@ -70,7 +78,7 @@ export async function handleCreateGroup(
         voiceChannel = await guild.channels.create({
           name: channelName,
           type: ChannelType.GuildVoice,
-          parent: config.categoryChannelId,
+          parent: categoryId,
           permissionOverwrites: [
             {
               id: guild.id,
@@ -92,8 +100,8 @@ export async function handleCreateGroup(
           Connect: true,
           Speak: true,
         });
-        if (config.categoryChannelId && voiceChannel.parentId !== config.categoryChannelId) {
-          await voiceChannel.setParent(config.categoryChannelId);
+        if (categoryId && voiceChannel.parentId !== categoryId) {
+          await voiceChannel.setParent(categoryId);
         }
       }
     }
@@ -132,5 +140,51 @@ export async function handleCreateGroup(
     await interaction.editReply(
       "Un error ocurrio al crear el grupo. Verifica la consola.",
     );
+  }
+}
+
+export async function handleDeleteGroup(
+  interaction: ChatInputCommandInteraction,
+  config: GuildConfig,
+) {
+  const groupName = interaction.options.getString("name", true);
+  const roleName = `Grupo ${groupName}`;
+  const channelName = `grupo-${groupName.toLowerCase().replace(/\s+/g, "-")}`;
+
+  await interaction.deferReply();
+
+  try {
+    const guild = interaction.guild!;
+    let deletedCount = 0;
+
+    const channelsToDelete = guild.channels.cache.filter(
+      (c) =>
+        c.name === channelName &&
+        (c.type === ChannelType.GuildText || c.type === ChannelType.GuildVoice),
+    );
+
+    for (const channel of channelsToDelete.values()) {
+      await channel.delete(`Group deletion: ${groupName}`);
+      deletedCount++;
+    }
+
+    const role = guild.roles.cache.find((r) => r.name === roleName);
+    if (role) {
+      await role.delete(`Group deletion: ${groupName}`);
+      deletedCount++;
+    }
+
+    if (deletedCount === 0) {
+      await interaction.editReply(
+        `No se encontraron canales o roles para el grupo **${groupName}**.`,
+      );
+    } else {
+      await interaction.editReply(
+        `Grupo **${groupName}** eliminado correctamente (canales y rol).`,
+      );
+    }
+  } catch (error) {
+    console.error(error);
+    await interaction.editReply("Ocurrió un error al intentar eliminar el grupo.");
   }
 }

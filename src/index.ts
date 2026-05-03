@@ -5,12 +5,13 @@ import {
   REST,
   Routes,
   GuildMember,
+  ChatInputCommandInteraction,
 } from "discord.js";
 import dotenv from "dotenv";
-import { getGuildConfig } from "./config";
+import { getGuildConfig, GuildConfig } from "./config";
 import { commands } from "./commands";
 import { handleSetup } from "./handlers/setupHandler";
-import { handleCreateGroup } from "./handlers/groupHandler";
+import { handleCreateGroup, handleDeleteGroup } from "./handlers/groupHandler";
 
 dotenv.config();
 
@@ -48,7 +49,6 @@ async function registerCommands(guildId: string) {
 client.once(Events.ClientReady, async (c) => {
   console.log(`Ready! Logged in as ${c.user.tag}`);
   
-  // Register commands for all guilds the bot is in
   for (const guild of c.guilds.cache.values()) {
     await registerCommands(guild.id);
   }
@@ -58,12 +58,22 @@ client.on(Events.GuildCreate, (guild) => {
   registerCommands(guild.id);
 });
 
+type CommandTable = {
+  [key: string]: (interaction: ChatInputCommandInteraction, config: GuildConfig) => Promise<void>;
+};
+
+const commandTable: CommandTable = {
+  "create-group": handleCreateGroup,
+  "delete-group": handleDeleteGroup,
+};
+
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
   const { commandName, guildId } = interaction;
   if (!guildId) return;
 
+  // Setup is a special case as it defines the config
   if (commandName === "setup") {
     await handleSetup(interaction);
     return;
@@ -96,8 +106,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  if (commandName === "create-group") {
-    await handleCreateGroup(interaction, config);
+  const handler = commandTable[commandName];
+  if (handler) {
+    await handler(interaction, config);
   }
 });
 

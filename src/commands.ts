@@ -47,4 +47,13 @@ export const commands = [
         )
         .setRequired(true),
     ),
+  new SlashCommandBuilder()
+    .setName("delete-group")
+    .setDescription("Elimina un grupo (rol y canales).")
+    .addStringOption((option) =>
+      option
+        .setName("name")
+        .setDescription("Nombre del grupo a eliminar.")
+        .setRequired(true),
+    ),
 ].map((command) => command.toJSON());
