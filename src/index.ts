@@ -45,8 +45,13 @@ async function registerCommands(guildId: string) {
   }
 }
 
-client.once(Events.ClientReady, (c) => {
+client.once(Events.ClientReady, async (c) => {
   console.log(`Ready! Logged in as ${c.user.tag}`);
+  
+  // Register commands for all guilds the bot is in
+  for (const guild of c.guilds.cache.values()) {
+    await registerCommands(guild.id);
+  }
 });
 
 client.on(Events.GuildCreate, (guild) => {
