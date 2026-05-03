@@ -22,6 +22,13 @@ export const commands = [
         .setName("create_voice")
         .setDescription("Deberia el bot crear un canal de voz para cada grupo?")
         .setRequired(true),
+    )
+    .addChannelOption((option) =>
+      option
+        .setName("category")
+        .setDescription("La categoría donde se crearán los canales de grupo")
+        .setRequired(false)
+        .addChannelTypes(ChannelType.GuildCategory),
     ),
   new SlashCommandBuilder()
     .setName("create-group")

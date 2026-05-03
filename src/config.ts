@@ -6,6 +6,7 @@ const CONFIG_PATH = path.join(__dirname, "../data/config.json");
 export interface GuildConfig {
   adminChannelId?: string;
   adminRoleId?: string;
+  categoryChannelId?: string;
   createVoiceChannel: boolean;
 }
 

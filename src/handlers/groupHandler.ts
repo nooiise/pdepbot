@@ -36,6 +36,7 @@ export async function handleCreateGroup(
       textChannel = await guild.channels.create({
         name: channelName,
         type: ChannelType.GuildText,
+        parent: config.categoryChannelId,
         permissionOverwrites: [
           {
             id: guild.id,
@@ -55,6 +56,9 @@ export async function handleCreateGroup(
         ViewChannel: true,
         SendMessages: true,
       });
+      if (config.categoryChannelId && textChannel.parentId !== config.categoryChannelId) {
+        await textChannel.setParent(config.categoryChannelId);
+      }
     }
 
     let voiceChannel: VoiceChannel | null = null;
@@ -66,6 +70,7 @@ export async function handleCreateGroup(
         voiceChannel = await guild.channels.create({
           name: channelName,
           type: ChannelType.GuildVoice,
+          parent: config.categoryChannelId,
           permissionOverwrites: [
             {
               id: guild.id,
@@ -87,6 +92,9 @@ export async function handleCreateGroup(
           Connect: true,
           Speak: true,
         });
+        if (config.categoryChannelId && voiceChannel.parentId !== config.categoryChannelId) {
+          await voiceChannel.setParent(config.categoryChannelId);
+        }
       }
     }
 
