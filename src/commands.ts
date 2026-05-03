@@ -56,4 +56,13 @@ export const commands = [
         .setDescription("Nombre del grupo a eliminar.")
         .setRequired(true),
     ),
+  new SlashCommandBuilder()
+    .setName("sync-group-channels")
+    .setDescription("Crea canales faltantes para un rol de grupo existente.")
+    .addRoleOption((option) =>
+      option
+        .setName("role")
+        .setDescription("El rol del grupo (ej: Grupo Los-Magios).")
+        .setRequired(true),
+    ),
 ].map((command) => command.toJSON());

@@ -11,7 +11,11 @@ import dotenv from "dotenv";
 import { getGuildConfig, GuildConfig } from "./config";
 import { commands } from "./commands";
 import { handleSetup } from "./handlers/setupHandler";
-import { handleCreateGroup, handleDeleteGroup } from "./handlers/groupHandler";
+import {
+  handleCreateGroup,
+  handleDeleteGroup,
+  handleSyncGroupChannels,
+} from "./handlers/groupHandler";
 
 dotenv.config();
 
@@ -48,7 +52,7 @@ async function registerCommands(guildId: string) {
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`Ready! Logged in as ${c.user.tag}`);
-  
+
   for (const guild of c.guilds.cache.values()) {
     await registerCommands(guild.id);
   }
@@ -59,12 +63,16 @@ client.on(Events.GuildCreate, (guild) => {
 });
 
 type CommandTable = {
-  [key: string]: (interaction: ChatInputCommandInteraction, config: GuildConfig) => Promise<void>;
+  [key: string]: (
+    interaction: ChatInputCommandInteraction,
+    config: GuildConfig
+  ) => Promise<void>;
 };
 
 const commandTable: CommandTable = {
   "create-group": handleCreateGroup,
   "delete-group": handleDeleteGroup,
+  "sync-group-channels": handleSyncGroupChannels,
 };
 
 client.on(Events.InteractionCreate, async (interaction) => {

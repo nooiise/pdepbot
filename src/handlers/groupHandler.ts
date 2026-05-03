@@ -4,30 +4,112 @@ import {
   PermissionFlagsBits,
   TextChannel,
   VoiceChannel,
+  Role,
+  Guild,
 } from "discord.js";
 import { GuildConfig } from "../config";
 
+/**
+ * Common logic to create/sync channels for a group role.
+ */
+async function syncChannels(
+  guild: Guild,
+  role: Role,
+  groupName: string,
+  config: GuildConfig
+): Promise<{ textChannel: TextChannel; voiceChannel: VoiceChannel | null }> {
+  const channelName = `grupo-${groupName.toLowerCase().replace(/\s+/g, "-")}`;
+
+  // Verify if category still exists
+  let categoryId = config.categoryChannelId;
+  if (categoryId) {
+    const category = guild.channels.cache.get(categoryId);
+    if (!category || category.type !== ChannelType.GuildCategory) {
+      categoryId = undefined;
+    }
+  }
+
+  // 1. Text Channel
+  let textChannel = guild.channels.cache.find(
+    (c) => c.name === channelName && c.type === ChannelType.GuildText
+  ) as TextChannel;
+
+  if (!textChannel) {
+    textChannel = await guild.channels.create({
+      name: channelName,
+      type: ChannelType.GuildText,
+      parent: categoryId,
+      permissionOverwrites: [
+        {
+          id: guild.id,
+          deny: [PermissionFlagsBits.ViewChannel],
+        },
+        {
+          id: role.id,
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+        },
+      ],
+    });
+  } else {
+    await textChannel.permissionOverwrites.edit(role.id, {
+      ViewChannel: true,
+      SendMessages: true,
+    });
+    if (categoryId && textChannel.parentId !== categoryId) {
+      await textChannel.setParent(categoryId);
+    }
+  }
+
+  // 2. Voice Channel
+  let voiceChannel: VoiceChannel | null = null;
+  if (config.createVoiceChannel) {
+    voiceChannel = guild.channels.cache.find(
+      (c) => c.name === channelName && c.type === ChannelType.GuildVoice
+    ) as VoiceChannel;
+
+    if (!voiceChannel) {
+      voiceChannel = await guild.channels.create({
+        name: channelName,
+        type: ChannelType.GuildVoice,
+        parent: categoryId,
+        permissionOverwrites: [
+          {
+            id: guild.id,
+            deny: [PermissionFlagsBits.ViewChannel],
+          },
+          {
+            id: role.id,
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak],
+          },
+        ],
+      });
+    } else {
+      await voiceChannel.permissionOverwrites.edit(role.id, {
+        ViewChannel: true,
+        Connect: true,
+        Speak: true,
+      });
+      if (categoryId && voiceChannel.parentId !== categoryId) {
+        await voiceChannel.setParent(categoryId);
+      }
+    }
+  }
+
+  return { textChannel, voiceChannel };
+}
+
 export async function handleCreateGroup(
   interaction: ChatInputCommandInteraction,
-  config: GuildConfig,
+  config: GuildConfig
 ) {
   const groupName = interaction.options.getString("name", true);
-  const membersInput = interaction.options.getString("members", true);
+  const membersInput = interaction.options.getString("members", false);
 
   await interaction.deferReply();
 
   try {
     const guild = interaction.guild!;
     const roleName = `Grupo ${groupName}`;
-    const channelName = `grupo-${groupName.toLowerCase().replace(/\s+/g, "-")}`;
-
-    let categoryId = config.categoryChannelId;
-    if (categoryId) {
-      const category = guild.channels.cache.get(categoryId);
-      if (!category || category.type !== ChannelType.GuildCategory) {
-        categoryId = undefined; 
-      }
-    }
 
     let role = guild.roles.cache.find((r) => r.name === roleName);
     if (!role) {
@@ -37,86 +119,22 @@ export async function handleCreateGroup(
       });
     }
 
-    let textChannel = guild.channels.cache.find(
-      (c) => c.name === channelName && c.type === ChannelType.GuildText,
-    ) as TextChannel;
-    if (!textChannel) {
-      textChannel = await guild.channels.create({
-        name: channelName,
-        type: ChannelType.GuildText,
-        parent: categoryId,
-        permissionOverwrites: [
-          {
-            id: guild.id,
-            deny: [PermissionFlagsBits.ViewChannel],
-          },
-          {
-            id: role.id,
-            allow: [
-              PermissionFlagsBits.ViewChannel,
-              PermissionFlagsBits.SendMessages,
-            ],
-          },
-        ],
-      });
-    } else {
-      await textChannel.permissionOverwrites.edit(role.id, {
-        ViewChannel: true,
-        SendMessages: true,
-      });
-      if (categoryId && textChannel.parentId !== categoryId) {
-        await textChannel.setParent(categoryId);
-      }
-    }
+    const { textChannel, voiceChannel } = await syncChannels(guild, role, groupName, config);
 
-    let voiceChannel: VoiceChannel | null = null;
-    if (config.createVoiceChannel) {
-      voiceChannel = guild.channels.cache.find(
-        (c) => c.name === channelName && c.type === ChannelType.GuildVoice,
-      ) as VoiceChannel;
-      if (!voiceChannel) {
-        voiceChannel = await guild.channels.create({
-          name: channelName,
-          type: ChannelType.GuildVoice,
-          parent: categoryId,
-          permissionOverwrites: [
-            {
-              id: guild.id,
-              deny: [PermissionFlagsBits.ViewChannel],
-            },
-            {
-              id: role.id,
-              allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.Connect,
-                PermissionFlagsBits.Speak,
-              ],
-            },
-          ],
-        });
-      } else {
-        await voiceChannel.permissionOverwrites.edit(role.id, {
-          ViewChannel: true,
-          Connect: true,
-          Speak: true,
-        });
-        if (categoryId && voiceChannel.parentId !== categoryId) {
-          await voiceChannel.setParent(categoryId);
-        }
-      }
-    }
-
-    const memberIds = membersInput.match(/\d+/g) || [];
+    // Handle Members if provided
     const addedMembers: string[] = [];
     const failedMembers: string[] = [];
 
-    for (const id of memberIds) {
-      try {
-        const member = await guild.members.fetch(id);
-        await member.roles.add(role);
-        addedMembers.push(member.displayName);
-      } catch (e) {
-        failedMembers.push(id);
+    if (membersInput) {
+      const memberIds = membersInput.match(/\d+/g) || [];
+      for (const id of memberIds) {
+        try {
+          const member = await guild.members.fetch(id);
+          await member.roles.add(role);
+          addedMembers.push(member.displayName);
+        } catch (e) {
+          failedMembers.push(id);
+        }
       }
     }
 
@@ -128,7 +146,9 @@ export async function handleCreateGroup(
       response += `\n- Canal de voz: <#${voiceChannel.id}>`;
     }
 
-    response += `\n- Integrantes: ${addedMembers.join(", ") || "None"}`;
+    if (addedMembers.length > 0) {
+      response += `\n- Integrantes agregados: ${addedMembers.join(", ")}`;
+    }
 
     if (failedMembers.length > 0) {
       response += `\n- Error al agregar integrante (verifica IDs): ${failedMembers.join(", ")}`;
@@ -137,15 +157,49 @@ export async function handleCreateGroup(
     await interaction.editReply(response);
   } catch (error) {
     console.error(error);
-    await interaction.editReply(
-      "Un error ocurrio al crear el grupo. Verifica la consola.",
-    );
+    await interaction.editReply("Un error ocurrió al crear el grupo.");
+  }
+}
+
+export async function handleSyncGroupChannels(
+  interaction: ChatInputCommandInteraction,
+  config: GuildConfig
+) {
+  const role = interaction.options.getRole("role", true) as Role;
+
+  if (!role.name.startsWith("Grupo ")) {
+    await interaction.reply({
+      content: "El rol seleccionado debe empezar con 'Grupo '.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.deferReply();
+
+  try {
+    const guild = interaction.guild!;
+    const groupName = role.name.replace("Grupo ", "");
+
+    const { textChannel, voiceChannel } = await syncChannels(guild, role, groupName, config);
+
+    let response = `Sincronización completada para el rol **${role.name}**.
+- Canal de texto: <#${textChannel.id}>`;
+
+    if (voiceChannel) {
+      response += `\n- Canal de voz: <#${voiceChannel.id}>`;
+    }
+
+    await interaction.editReply(response);
+  } catch (error) {
+    console.error(error);
+    await interaction.editReply("Ocurrió un error al sincronizar los canales.");
   }
 }
 
 export async function handleDeleteGroup(
   interaction: ChatInputCommandInteraction,
-  config: GuildConfig,
+  config: GuildConfig
 ) {
   const groupName = interaction.options.getString("name", true);
   const roleName = `Grupo ${groupName}`;
@@ -160,7 +214,7 @@ export async function handleDeleteGroup(
     const channelsToDelete = guild.channels.cache.filter(
       (c) =>
         c.name === channelName &&
-        (c.type === ChannelType.GuildText || c.type === ChannelType.GuildVoice),
+        (c.type === ChannelType.GuildText || c.type === ChannelType.GuildVoice)
     );
 
     for (const channel of channelsToDelete.values()) {
@@ -175,13 +229,9 @@ export async function handleDeleteGroup(
     }
 
     if (deletedCount === 0) {
-      await interaction.editReply(
-        `No se encontraron canales o roles para el grupo **${groupName}**.`,
-      );
+      await interaction.editReply(`No se encontraron canales o roles para el grupo **${groupName}**.`);
     } else {
-      await interaction.editReply(
-        `Grupo **${groupName}** eliminado correctamente (canales y rol).`,
-      );
+      await interaction.editReply(`Grupo **${groupName}** eliminado correctamente.`);
     }
   } catch (error) {
     console.error(error);
