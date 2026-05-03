@@ -65,4 +65,13 @@ export const commands = [
         .setDescription("El rol del grupo (ej: Grupo Los-Magios).")
         .setRequired(true),
     ),
+  new SlashCommandBuilder()
+    .setName("sync-groups-bulk")
+    .setDescription("Sincroniza múltiples roles de grupo a la vez.")
+    .addStringOption((option) =>
+      option
+        .setName("roles")
+        .setDescription("Menciones o IDs de los roles de grupo (separados por espacio).")
+        .setRequired(true),
+    ),
 ].map((command) => command.toJSON());

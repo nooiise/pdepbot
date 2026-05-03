@@ -15,6 +15,7 @@ import {
   handleCreateGroup,
   handleDeleteGroup,
   handleSyncGroupChannels,
+  handleSyncGroupsBulk,
 } from "./handlers/groupHandler";
 
 dotenv.config();
@@ -73,6 +74,7 @@ const commandTable: CommandTable = {
   "create-group": handleCreateGroup,
   "delete-group": handleDeleteGroup,
   "sync-group-channels": handleSyncGroupChannels,
+  "sync-groups-bulk": handleSyncGroupsBulk,
 };
 
 client.on(Events.InteractionCreate, async (interaction) => {

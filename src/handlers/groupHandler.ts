@@ -197,6 +197,53 @@ export async function handleSyncGroupChannels(
   }
 }
 
+export async function handleSyncGroupsBulk(
+  interaction: ChatInputCommandInteraction,
+  config: GuildConfig
+) {
+  const rolesInput = interaction.options.getString("roles", true);
+
+  await interaction.deferReply();
+
+  try {
+    const guild = interaction.guild!;
+    const roleIds = Array.from(new Set(rolesInput.match(/\d+/g) || []));
+    const results: string[] = [];
+
+    for (const id of roleIds) {
+      const role = guild.roles.cache.get(id);
+      if (!role) {
+        results.push(`- ❌ ID \`${id}\`: Rol no encontrado.`);
+        continue;
+      }
+
+      if (!role.name.startsWith("Grupo ")) {
+        results.push(`- ❌ ${role.name}: No empieza con 'Grupo '.`);
+        continue;
+      }
+
+      const groupName = role.name.replace("Grupo ", "");
+      const { textChannel } = await syncChannels(guild, role, groupName, config);
+      results.push(`- ✅ **${role.name}**: Sincronizado (<#${textChannel.id}>).`);
+    }
+
+    if (results.length === 0) {
+      await interaction.editReply("No se encontraron IDs de roles válidos.");
+    } else {
+      const responseText = `**Resultados de sincronización masiva:**\n${results.join("\n")}`;
+      // Discord has a 2000 character limit, if it's too long we might need to truncate or split
+      if (responseText.length > 2000) {
+        await interaction.editReply("Proceso completado, pero la lista es demasiado larga para mostrarla completa.");
+      } else {
+        await interaction.editReply(responseText);
+      }
+    }
+  } catch (error) {
+    console.error(error);
+    await interaction.editReply("Ocurrió un error durante la sincronización masiva.");
+  }
+}
+
 export async function handleDeleteGroup(
   interaction: ChatInputCommandInteraction,
   config: GuildConfig
